@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISTRAC TELEMETRY CONSOLE</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+    <style>
+        :root {
+            --panel-bg: #87919e; /* Battleship grey */
+            --panel-border-light: #b4bcc4;
+            --panel-border-dark: #525a61;
+            
+            --crt-bg: #0a110a;
+            --crt-green: #33ff33;
+            --crt-amber: #ffcc00;
+            --crt-red: #ff3333;
+            --crt-dim: #1a4d1a;
+            
+            --label-color: #222;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #2b2f33;
+            color: var(--label-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* The main physical console */
+        .console {
+            background-color: var(--panel-bg);
+            border-top: 4px solid var(--panel-border-light);
+            border-left: 4px solid var(--panel-border-light);
+            border-bottom: 5px solid var(--panel-border-dark);
+            border-right: 5px solid var(--panel-border-dark);
+            padding: 30px;
+            box-shadow: 10px 10px 30px rgba(0,0,0,0.8);
+            width: 100%;
+            max-width: 1400px;
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 1.5fr;
+            gap: 25px;
+        }
+
+        /* Header plates */
+        .plate {
+            grid-column: 1 / -1;
+            background-color: #d1d5d8;
+            border-top: 2px solid #fff;
+            border-left: 2px solid #fff;
+            border-bottom: 2px solid #888;
+            border-right: 2px solid #888;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .title {
+            font-family: 'Arial Black', Impact, sans-serif;
+            font-size: 28px;
+            letter-spacing: 2px;
+            color: #111;
+        }
+
+        .subtitle {
+            font-family: 'Arial', sans-serif;
+            font-weight: bold;
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #444;
+            margin-top: 5px;
+        }
+        
+        .isro-logo {
+            font-family: 'Arial Black', Impact, sans-serif;
+            color: #0033a0;
+            font-size: 32px;
+            letter-spacing: 4px;
+        }
+
+        /* Sub-panels */
+        .sub-panel {
+            border-top: 2px solid var(--panel-border-dark);
+            border-left: 2px solid var(--panel-border-dark);
+            border-bottom: 2px solid var(--panel-border-light);
+            border-right: 2px solid var(--panel-border-light);
+            padding: 20px;
+            position: relative;
+        }
+
+        .panel-label {
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: var(--panel-bg);
+            padding: 0 10px;
+            font-weight: bold;
+            font-size: 14px;
+            letter-spacing: 1px;
+            color: #333;
+        }
+
+        /* CRT Screens */
+        .crt-screen {
+            background-color: var(--crt-bg);
+            border: 8px solid #222;
+            border-radius: 10px;
+            padding: 15px;
+            font-family: 'VT323', 'Courier New', monospace;
+            color: var(--crt-green);
+            box-shadow: inset 0 0 15px rgba(0,0,0,1);
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        /* Scanline effect */
+        .crt-screen::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 24px;
+            line-height: 1.2;
+            text-shadow: 0 0 5px var(--crt-green);
+        }
+
+        .data-label { color: var(--crt-amber); text-shadow: 0 0 5px var(--crt-amber); }
+        
+        .alert-red { color: var(--crt-red); text-shadow: 0 0 5px var(--crt-red); animation: flash 1s infinite;}
+        
+        @keyframes flash {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        /* Indicator lights */
+        .indicators-row {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 15px;
+            background: #6a747e;
+            border: inset 3px #555;
+        }
+
+        .lamp-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .lamp-label {
+            font-weight: bold;
+            font-size: 12px;
+            color: #ddd;
+        }
+
+        .lamp {
+            width: 40px;
+            height: 20px;
+            border: 2px solid #222;
+            border-top-color: #666;
+            border-left-color: #666;
+            background-color: #400; /* Off state (Dark red) */
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .lamp.green-on {
+            background-color: #3f3;
+            box-shadow: 0 0 15px #3f3, inset 2px 2px 5px rgba(255,255,255,0.7);
+        }
+        
+        .lamp.red-on {
+            background-color: #f33;
+            box-shadow: 0 0 15px #f33, inset 2px 2px 5px rgba(255,255,255,0.7);
+        }
+
+        /* Hex terminal */
+        .terminal-scroll {
+            height: 480px;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            font-size: 20px;
+        }
+        
+        .hex-line {
+            white-space: pre;
+            text-shadow: 0 0 4px var(--crt-green);
+        }
+
+        /* Analog Meters Style */
+        .meter-row {
+            margin-bottom: 20px;
+        }
+        .meter-bg {
+            background: #fff;
+            border: inset 2px #888;
+            height: 20px;
+            width: 100%;
+            position: relative;
+        }
+        .meter-needle {
+            width: 4px;
+            height: 24px;
+            background: red;
+            position: absolute;
+            top: -2px;
+            left: 50%;
+            transition: left 0.1s linear;
+            box-shadow: 2px 2px 2px rgba(0,0,0,0.5);
+        }
+        .meter-scale {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        .button-push {
+            background: #d44;
+            border-top: 3px solid #f88;
+            border-left: 3px solid #f88;
+            border-bottom: 3px solid #811;
+            border-right: 3px solid #811;
+            color: white;
+            font-weight: bold;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        .button-push:active {
+            border-top: 3px solid #811;
+            border-left: 3px solid #811;
+            border-bottom: 3px solid #f88;
+            border-right: 3px solid #f88;
+            background: #c33;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="console">
+        <!-- TOP PLATE -->
+        <div class="plate">
+            <div>
+                <div class="title">CHANDIGARH UNIVERSITY</div>
+                <div class="subtitle">TELEMETRY TRACKING & COMMAND NETWORK</div>
+            </div>
+            <div style="text-align: right;">
+                <div class="isro-logo" style="font-size: 36px; letter-spacing: 4px;">KCC</div>
+            </div>
+        </div>
+
+        <!-- LEFT PANEL: ENVIRONMENTAL -->
+        <div class="sub-panel">
+            <div class="panel-label">ENVIRON-SYS SEC-1</div>
+            
+            <div class="crt-screen" style="height: 180px;">
+                <div class="data-row">
+                    <span class="data-label">SYS_TEMP:</span>
+                    <span id="val-temp">00.00</span> C
+                </div>
+                <div class="data-row">
+                    <span class="data-label">SYS_HUMD:</span>
+                    <span id="val-hum">00.00</span> %
+                </div>
+                <div class="data-row" style="margin-top: 20px;">
+                    <span class="data-label">SOLAR (LDR):</span>
+                    <span id="val-ldr">AWAITING</span>
+                </div>
+            </div>
+
+            <div class="indicators-row">
+                <div class="lamp-box">
+                    <div class="lamp-label">RX CARRIER</div>
+                    <div class="lamp" id="lamp-rx"></div>
+                </div>
+                <div class="lamp-box">
+                    <div class="lamp-label">PKT LOCK</div>
+                    <div class="lamp" id="lamp-lock"></div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px; text-align: center;">
+                <button class="button-push" onclick="injectTestPacket()">SYS TEST PGM</button>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL: INERTIAL DATA -->
+        <div class="sub-panel">
+            <div class="panel-label">INERTIAL MEASUREMENT UNIT</div>
+            
+            <div style="background: #e4e7e6; padding: 20px; border: inset 3px #999;">
+                <div style="font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #aaa;">ACCELEROMETER (X,Y,Z)</div>
+                <div class="meter-row">
+                    <div class="meter-bg"><div class="meter-needle" id="ndl-ax"></div></div>
+                    <div class="meter-scale"><span>-</span><span>X</span><span>+</span></div>
+                </div>
+                <div class="meter-row">
+                    <div class="meter-bg"><div class="meter-needle" id="ndl-ay"></div></div>
+                    <div class="meter-scale"><span>-</span><span>Y</span><span>+</span></div>
+                </div>
+                <div class="meter-row">
+                    <div class="meter-bg"><div class="meter-needle" id="ndl-az"></div></div>
+                    <div class="meter-scale"><span>-</span><span>Z</span><span>+</span></div>
+                </div>
+
+                <div style="font-weight: bold; margin-bottom: 10px; margin-top: 20px; border-bottom: 2px solid #aaa;">GYROSCOPE (X,Y,Z)</div>
+                <div class="meter-row">
+                    <div class="meter-bg"><div class="meter-needle" style="background:#33f" id="ndl-gx"></div></div>
+                    <div class="meter-scale"><span>-</span><span>X</span><span>+</span></div>
+                </div>
+                <div class="meter-row">
+                    <div class="meter-bg"><div class="meter-needle" style="background:#33f" id="ndl-gy"></div></div>
+                    <div class="meter-scale"><span>-</span><span>Y</span><span>+</span></div>
+                </div>
+                <div class="meter-row">
+                    <div class="meter-bg"><div class="meter-needle" style="background:#33f" id="ndl-gz"></div></div>
+                    <div class="meter-scale"><span>-</span><span>Z</span><span>+</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: RAW FEED -->
+        <div class="sub-panel">
+            <div class="panel-label">LINK MONITOR 01</div>
+            
+            <div class="crt-screen" style="height: 520px; margin-bottom: 0;">
+                <div style="border-bottom: 2px dashed var(--crt-dim); padding-bottom: 10px; margin-bottom: 10px;">
+                    <div class="data-row" style="font-size:18px;">
+                        <span class="data-label">FRAMES RX:</span> <span id="val-pkt">00000</span>
+                    </div>
+                    <div class="data-row" style="font-size:18px;">
+                        <span class="data-label">APID:</span> <span id="val-apid">---</span>
+                    </div>
+                    <div class="data-row" style="font-size:18px;">
+                        <span class="data-label">RATE(B/s):</span> <span id="val-rate">000</span>
+                    </div>
+                </div>
+                
+                <div class="terminal-scroll" id="terminal">
+                    <div class="hex-line" style="text-align: center; margin-top: 20px;">* STANDBY FOR TELEMETRY *</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const socket = io();
+        let packetCount = 0;
+        let bytesReceived = 0;
+        let startTime = Date.now();
+        const terminal = document.getElementById('terminal');
+        let rxTimer = null;
+
+        socket.on('connect', () => {
+            document.getElementById('lamp-rx').className = 'lamp green-on';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('lamp-rx').className = 'lamp';
+            document.getElementById('lamp-lock').className = 'lamp red-on';
+        });
+
+        function updateNeedle(id, val, max_val) {
+            const ndl = document.getElementById('ndl-' + id);
+            let norm = val / max_val;
+            if (norm > 1) norm = 1;
+            if (norm < -1) norm = -1;
+            // 0 is 50%, -1 is 0%, +1 is 100%
+            let percent = (norm + 1) * 50;
+            ndl.style.left = percent + '%';
+        }
+
+        socket.on('telemetry_packet', (data) => {
+            if (packetCount === 0) terminal.innerHTML = '';
+            
+            // Flash PKT LOCK lamp
+            document.getElementById('lamp-lock').className = 'lamp green-on';
+            clearTimeout(rxTimer);
+            rxTimer = setTimeout(() => {
+                document.getElementById('lamp-lock').className = 'lamp';
+            }, 200);
+
+            packetCount++;
+            bytesReceived += data.length;
+            
+            // Link Stats (zero-padded)
+            document.getElementById('val-pkt').innerText = packetCount.toString().padStart(5, '0');
+            document.getElementById('val-apid').innerText = data.apid !== undefined ? data.apid.toString().padStart(3, '0') : '---';
+            let elapsedSec = (Date.now() - startTime) / 1000;
+            if(elapsedSec > 0) document.getElementById('val-rate').innerText = (bytesReceived / elapsedSec).toFixed(0).padStart(3, '0');
+
+            // Parsed Telemetry
+            if (data.telemetry && !data.telemetry.error) {
+                // Pad temperature
+                let tempStr = data.telemetry.temperature.toFixed(2);
+                document.getElementById('val-temp').innerText = (tempStr == "-999.00") ? "SENSOR ERR" : tempStr.padStart(5, '0');
+                if(tempStr == "-999.00") document.getElementById('val-temp').className = "alert-red";
+                else document.getElementById('val-temp').className = "";
+
+                let humStr = data.telemetry.humidity.toFixed(2);
+                document.getElementById('val-hum').innerText = (humStr == "-999.00") ? "SENSOR ERR" : humStr.padStart(5, '0');
+                if(humStr == "-999.00") document.getElementById('val-hum').className = "alert-red";
+                else document.getElementById('val-hum').className = "";
+
+                document.getElementById('val-ldr').innerText = data.telemetry.ldr ? 'NOMINAL' : 'ECLIPSE';
+                if(!data.telemetry.ldr) document.getElementById('val-ldr').className = "alert-red";
+                else document.getElementById('val-ldr').className = "";
+                
+                // Update physical analog needles
+                updateNeedle('ax', data.telemetry.accelX, 32768);
+                updateNeedle('ay', data.telemetry.accelY, 32768);
+                updateNeedle('az', data.telemetry.accelZ, 32768);
+                
+                updateNeedle('gx', data.telemetry.gyroX, 32768);
+                updateNeedle('gy', data.telemetry.gyroY, 32768);
+                updateNeedle('gz', data.telemetry.gyroZ, 32768);
+            }
+
+            // CRT Terminal Line
+            const entry = document.createElement('div');
+            entry.className = 'hex-line';
+            let head = `[SEQ:${data.seq_count.toString().padStart(4,'0')}]`;
+            
+            // Format hex nicely
+            let hex = data.payload_hex.toUpperCase();
+            let chunked = hex.match(/.{1,8}/g).join(' ');
+            
+            entry.innerText = `${head} > ${chunked}`;
+            terminal.appendChild(entry);
+            
+            while (terminal.children.length > 20) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        });
+
+        function injectTestPacket() { socket.emit('inject_test_packet'); }
+    </script>
+</body>
+</html>
