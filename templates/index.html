@@ -202,9 +202,6 @@
         .terminal-scroll {
             height: 480px;
             overflow-y: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
             font-size: 20px;
         }
         
@@ -457,6 +454,7 @@
             
             entry.innerText = `${head} > ${chunked}`;
             terminal.appendChild(entry);
+            terminal.scrollTop = terminal.scrollHeight;
             
             while (terminal.children.length > 20) {
                 terminal.removeChild(terminal.firstChild);

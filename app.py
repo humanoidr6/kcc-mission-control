@@ -27,7 +27,7 @@ def parse_ccsds(data):
     if len(data) < 6:
         return {"error": "Packet too short"}
     
-    header = struct.unpack("<HHH", data[:6])
+    header = struct.unpack(">HHH", data[:6])
     word1, word2, length = header
     
     apid = word1 & 0x07FF
