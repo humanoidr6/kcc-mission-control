@@ -38,6 +38,7 @@ while True:
         idx = buffer.find(b"rx msg: ")
         if idx != -1:
             # We found the start of a packet!
+            with open("/tmp/pipe.log", "a") as f: f.write(f"FOUND rx msg: len={len(buffer)}\n")
             if len(buffer) >= idx + 8 + 33:
                 payload = buffer[idx+8 : idx+8+33]
                 

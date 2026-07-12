@@ -18,8 +18,9 @@ signal.signal(signal.SIGTERM, cleanup)
 # ALWAYS cleanup before starting to free up the RTL-SDR dongle!
 print("Cleaning up old processes...")
 os.system("pkill -9 -f app.py")
-os.system("pkill -9 -f start_lora")
-os.system("pkill -9 -f pipe_lora")
+os.system("pkill -9 -f pipe_lora.py")
+os.system("pkill -9 -f start_lora.py")
+os.system("usbreset 0bda:2838")
 time.sleep(1)
 
 print("Starting Mission Control Backend...")
