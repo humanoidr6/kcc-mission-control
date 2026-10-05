@@ -745,3 +745,13 @@ OV7670 camera link. **The 1U Teensy node (`Teensy_Node_Firmware`) was not change
 Planned on 5 Oct 2026, not built yet. The full plan, 6U wiring (ESC signals on Teensy pins 4–7), air
 protocol, motor-command security/failsafe design and open questions are in
 `humanoidr6/teensy-lora-video` → `docs/HANDOVER.md`. Start there.
+
+## Update 5 Oct 2026 (night): 1U yaw
+
+At the user's request the 1U node firmware gained gyro yaw (the only change; Teensy USB serial 17994270):
+- At power-up it measures the gyro-Z bias for ~2 s (**keep the node still**), then integrates GYRO_ZOUT (0x47,
+  ±250 dps) at ~100 Hz in `loop()` with a 0.4 °/s deadband.
+- It appends `Yaw:<deg>` before `Seq:`. Temp/Hum/LDR/Accel/Seq, 440 MHz LoRa SF7, and the 250 ms rate are unchanged.
+- The yaw is **relative** (0° = power-up heading; there's no magnetometer) and drifts slowly.
+- The ESP32 ground station (teensy-lora-video `ESP32_GroundStation`) forwards it as `"yaw"`, and the KCC dashboard
+  shows it. The extra ~9 bytes lengthen the LoRa packet slightly, and the 6U/camera slots still fit in the gap.
