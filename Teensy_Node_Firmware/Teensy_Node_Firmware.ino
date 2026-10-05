@@ -18,6 +18,55 @@ DHT dht(DHTPIN, DHTTYPE);
 bool mpu_found = false;
 uint8_t mpu_addr = 0x68;
 
+// Relative yaw from the gyro's Z axis (no magnetometer, so no absolute heading): the
+// bias is measured while still at power-up, then integrated in loop() at ~100 Hz.
+// 0 deg = heading at power-up; drifts slowly. Sent as "Yaw:" before "Seq:".
+#define YAW_SAMPLE_MS 10
+#define GYRO_DEADBAND_DPS 0.4
+float yawDeg = 0, gyroBiasZ = 0;
+bool yawOk = false;
+unsigned long lastGyroUs = 0;
+
+// Gyro Z in deg/s from GYRO_ZOUT (0x47), +-250 dps = 131 LSB/dps; NAN on failure.
+float readGyroZ() {
+  Wire.beginTransmission(mpu_addr);
+  Wire.write(0x47);
+  if (Wire.endTransmission(false) != 0) return NAN;
+  if (Wire.requestFrom((uint8_t)mpu_addr, (uint8_t)2, (uint8_t)true) != 2) return NAN;
+  int16_t raw = Wire.read() << 8 | Wire.read();
+  return raw / 131.0;
+}
+
+void calibrateGyro() {
+  float sum = 0;
+  int n = 0;
+  for (int i = 0; i < 200; i++) {   // ~2 s; keep the node still at power-up
+    float z = readGyroZ();
+    if (!isnan(z)) { sum += z; n++; }
+    delay(10);
+  }
+  gyroBiasZ = n ? sum / n : 0;
+  yawOk = n > 100;
+  yawDeg = 0;
+  lastGyroUs = micros();
+  Serial.println("Gyro Z bias " + String(gyroBiasZ, 2) + " deg/s; yaw zeroed");
+}
+
+void updateYaw() {
+  if (!yawOk) return;
+  unsigned long now = micros();
+  if (now - lastGyroUs < YAW_SAMPLE_MS * 1000UL) return;
+  float z = readGyroZ();
+  float dt = (now - lastGyroUs) / 1e6;
+  lastGyroUs = now;
+  if (isnan(z) || dt > 0.5) return;
+  float rate = z - gyroBiasZ;
+  if (fabs(rate) < GYRO_DEADBAND_DPS) rate = 0;
+  yawDeg += rate * dt;
+  if (yawDeg > 180) yawDeg -= 360;
+  if (yawDeg < -180) yawDeg += 360;
+}
+
 float lastTemp = 0.0;
 float lastHum = 0.0;
 unsigned long lastDHTRead = 0;
@@ -115,6 +164,12 @@ void setup() {
     Wire.write(0x6B); // PWR_MGMT_1
     Wire.write(0x00); // Wake up
     Wire.endTransmission();
+    Wire.beginTransmission(mpu_addr);
+    Wire.write(0x1B); // GYRO_CONFIG
+    Wire.write(0x00); // +-250 dps
+    Wire.endTransmission();
+    delay(100);       // gyro settles after wake
+    calibrateGyro();
   }
 
   SPI.begin();
@@ -152,6 +207,7 @@ void checkRadio() {
 
 void loop() {
   lastFeed = millis();
+  if (mpu_found) updateYaw();
 
   if (millis() - lastDHTRead >= 2000) {
     float t = dht.readTemperature();
@@ -189,6 +245,7 @@ void loop() {
       payload += "AccelX:" + String(ax_raw / 16384.0) + " ";
       payload += "AccelY:" + String(ay_raw / 16384.0) + " ";
       payload += "AccelZ:" + String(az_raw / 16384.0) + " ";
+      if (yawOk) payload += "Yaw:" + String(yawDeg, 1) + " ";
     }
   }
 
