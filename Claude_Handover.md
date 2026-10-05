@@ -739,3 +739,9 @@ OV7670 camera link. **The 1U Teensy node (`Teensy_Node_Firmware`) was not change
   `ESP32_GroundStation/` (credentials in a git-ignored `secrets.h`). It no longer uses the
   arduino-LoRa library; it uses that repo's `libraries/SX1278Fsk` driver for both modems.
   The pre-change sketch is backed up in `~/ESP32_LoRa_Receiver_backup_20261005/`.
+
+## Next: 6U node (sensors + 4 BLDC motors from the website)
+
+Planned on 5 Oct 2026, not built yet. The full plan, 6U wiring (ESC signals on Teensy pins 4–7), air
+protocol, motor-command security/failsafe design and open questions are in
+`humanoidr6/teensy-lora-video` → `docs/HANDOVER.md`. Start there.
