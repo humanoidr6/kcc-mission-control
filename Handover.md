@@ -691,7 +691,7 @@ void loop() {
 
 ---
 
-## Update 26 Sep 2026 — streaming to the KCC website (Claude Code)
+## Update 26 Sep 2026 — streaming to the KCC website (Code)
 
 The source listings above are the **pre-update** firmware (kept as a record); the files on
 disk are now newer.
